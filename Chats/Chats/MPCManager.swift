@@ -20,13 +20,11 @@ protocol MPCManagerDelegate {
     func invitationWasReceived(fromPeer: String)
     
     func connectedWithPeer(peerID: MCPeerID)
-    
-    func messageReceived(message: Message)
 }
 
 
 class MPCManager: NSObject, MCSessionDelegate, MCNearbyServiceBrowserDelegate, MCNearbyServiceAdvertiserDelegate {
-    
+
     var delegate: MPCManagerDelegate?
     
     var session: MCSession!
@@ -68,26 +66,26 @@ class MPCManager: NSObject, MCSessionDelegate, MCNearbyServiceBrowserDelegate, M
         
         let status = ABAddressBookGetAuthorizationStatus()
         switch status {
-        case .Authorized:
-            addressBookRef = ABAddressBookCreateWithOptions(nil, nil).takeRetainedValue()
-            contactsArrayRef = ABAddressBookCopyArrayOfAllPeople(addressBookRef).takeRetainedValue() as NSArray as [ABRecord]
-        case .NotDetermined:
-            var ok = false
-            ABAddressBookRequestAccessWithCompletion(nil) {
-                (granted:Bool, err:CFError!) in
-                dispatch_async(dispatch_get_main_queue()) {
-                    if granted {
-                        self.addressBookRef = ABAddressBookCreateWithOptions(nil, nil).takeRetainedValue()
-                        self.contactsArrayRef = ABAddressBookCopyArrayOfAllPeople(self.addressBookRef).takeRetainedValue() as NSArray as [ABRecord]
+            case .Authorized:
+                addressBookRef = ABAddressBookCreateWithOptions(nil, nil).takeRetainedValue()
+                contactsArrayRef = ABAddressBookCopyArrayOfAllPeople(addressBookRef).takeRetainedValue() as NSArray as [ABRecord]
+            case .NotDetermined:
+                var ok = false
+                ABAddressBookRequestAccessWithCompletion(nil) {
+                    (granted:Bool, err:CFError!) in
+                    dispatch_async(dispatch_get_main_queue()) {
+                        if granted {
+                            self.addressBookRef = ABAddressBookCreateWithOptions(nil, nil).takeRetainedValue()
+                            self.contactsArrayRef = ABAddressBookCopyArrayOfAllPeople(self.addressBookRef).takeRetainedValue() as NSArray as [ABRecord]
+                        }
                     }
                 }
-            }
         default:
             return;
         }
         
     }
-    
+
     func setMyPhoneNumber(myPhoneNumber: NSString) {
         self.myPhoneNumber = myPhoneNumber
     }
@@ -104,22 +102,9 @@ class MPCManager: NSObject, MCSessionDelegate, MCNearbyServiceBrowserDelegate, M
         
         browser.invitePeer(peerID, toSession: session, withContext: nil, timeout: 20)
         
-        println("Done with invitation...\n");
-        
-        //        for person in contactsArrayRef {
-        //            println(ABRecordCopyCompositeName(person).takeRetainedValue())
-        //  }
-        
-        var urlString = "mesh-treehacks.herokuapp.com/add-link"
-        var dataString = "N1=" + peerID.displayName + "&N2=" + peer.displayName
-        sendPostRequest(urlString, dataString: dataString)
-        
-        if foundPeers.count == 1 {
-            urlString = "mesh-treehacks.herokuapp.com/add-node"
-            dataString = "N=" + peerID.displayName
-            sendPostRequest(urlString, dataString: dataString)
-        }
-        
+//        for person in contactsArrayRef {
+//            println(ABRecordCopyCompositeName(person).takeRetainedValue())
+//        }
         delegate?.foundPeer()
     }
     
@@ -133,16 +118,6 @@ class MPCManager: NSObject, MCSessionDelegate, MCNearbyServiceBrowserDelegate, M
         }
         
         println("Lost peer: %s", peerID);
-        
-        var urlString = "mesh-treehacks.herokuapp.com/remove-link"
-        var dataString = "N1=" + peerID.displayName + "&N2=" + peer.displayName
-        sendPostRequest(urlString, dataString: dataString)
-        
-        if foundPeers.count == 0 {
-            urlString = "mesh-treehacks.herokuapp.com/remove-node"
-            dataString = "N=" + peerID.displayName
-            sendPostRequest(urlString, dataString: dataString)
-        }
         
         delegate?.lostPeer()
     }
@@ -184,45 +159,23 @@ class MPCManager: NSObject, MCSessionDelegate, MCNearbyServiceBrowserDelegate, M
     }
     
     
-    //    func session(session: MCSession!, didReceiveData data: NSData!, fromPeer peerID: MCPeerID!) {
-    //        let dictionary: [String: AnyObject] = ["data": data, "fromPeer": peerID]
-    //        NSNotificationCenter.defaultCenter().postNotificationName("receivedMPCDataNotification", object: dictionary)
-    //    }
-    
+//    func session(session: MCSession!, didReceiveData data: NSData!, fromPeer peerID: MCPeerID!) {
+//        let dictionary: [String: AnyObject] = ["data": data, "fromPeer": peerID]
+//        NSNotificationCenter.defaultCenter().postNotificationName("receivedMPCDataNotification", object: dictionary)
+//    }
+
     func session(session: MCSession!, didReceiveData data: NSData!, fromPeer peerID: MCPeerID!) {
         
         let packet: Packet = NSKeyedUnarchiver.unarchiveObjectWithData(data) as Packet
         
         let dictionary: [String: AnyObject] = ["data": packet.msg, "fromPeer": peerID]
-        println("DESTINATION MSG", packet.msg)
-        println("DESTINATION NUMBER %s", packet.destPhone)
-        println(self.myPhoneNumber)
+        println("DESTINATION PHONE", packet.msg)
         println(dictionary)
         
         seenMessages.append(packet.sourcePhone + packet.destPhone + packet.dateString)
         
         // temporary - checking whether you are the desired recipient of the message
-        if (packet.destPhone == (self.myPhoneNumber)) {
-            println("fucking received!!!!!")
-            
-            let newMsg = Message(incoming: true, text: packet.msg, sentDate: NSDate(), status: MessageStatus.Success)
-            
-            var oldChatFound = false
-            for chat in account.chats {
-                if chat.user.phone == packet.sourcePhone {
-                    oldChatFound = true
-                    chat.loadedMessages += [[newMsg]]
-                    chat.lastMessageText = packet.msg
-                }
-            }
-            if oldChatFound == false {
-                let newChat = Chat(user: User(phone: packet.sourcePhone), lastMessageText: packet.msg, lastMessageSentDate: NSDate())
-                newChat.loadedMessages += [[newMsg]]
-                newChat.lastMessageText = packet.msg
-                account.chats.insert(newChat, atIndex: 0)
-            }
-            
-            delegate?.messageReceived(newMsg)
+        if (packet.destPhone == self.myPhoneNumber) {
             NSNotificationCenter.defaultCenter().postNotificationName("receivedMPCDataNotification", object: nil, userInfo: dictionary)
         } else {
             var seen = false
@@ -251,14 +204,9 @@ class MPCManager: NSObject, MCSessionDelegate, MCNearbyServiceBrowserDelegate, M
     
     func sendData(packet: Packet!) -> Bool {
         var error: NSError?
+
         let packetDataToSend = NSKeyedArchiver.archivedDataWithRootObject(packet)
         session.sendData(packetDataToSend, toPeers: session.connectedPeers, withMode: MCSessionSendDataMode.Reliable, error: &error)
-        
-        for peer in session.connectedPeers {
-            var urlString = "mesh-treehacks.herokuapp.com/traverse-link"
-            var dataString = "N1=" + peer.displayName + "&N2=" + peer.displayName + "&TIME=" + packet.dateString
-            sendPostRequest(urlString, dataString: dataString)
-        }
         
         return true
     }
@@ -268,14 +216,14 @@ class MPCManager: NSObject, MCSessionDelegate, MCNearbyServiceBrowserDelegate, M
         let peersArray = NSArray(object: session.connectedPeers)
         var error: NSError?
         
-        
+
         var peerString = "I am connected to ";
         for peer in session.connectedPeers {
             peerString += peer.displayName + " "
         }
         
         println(peerString)
-        
+    
         let peerDictionary: [String: String] = ["message": peerString]
         let peerData = NSKeyedArchiver.archivedDataWithRootObject(peerDictionary)
         
@@ -286,42 +234,17 @@ class MPCManager: NSObject, MCSessionDelegate, MCNearbyServiceBrowserDelegate, M
         
         /*
         if !session.sendData(peerData, toPeers: session.connectedPeers, withMode: MCSessionSendDataMode.Reliable, error: &error) {
-        println("Error in peer string")
-        return false
+            println("Error in peer string")
+            return false
         }
-        
+
         
         if !session.sendData(dataToSend, toPeers: session.connectedPeers, withMode: MCSessionSendDataMode.Reliable, error: &error) {
-        println(error?.localizedDescription)
-        return false
+            println(error?.localizedDescription)
+            return false
         }*/
         
         return true
-    }
-    
-    func sendPostRequest(urlString: String, dataString: String) {
-        let url = NSURL(fileURLWithPath: urlString)
-        let cachePolicy = NSURLRequestCachePolicy.ReloadIgnoringLocalCacheData
-        var request = NSMutableURLRequest(URL: url!, cachePolicy: cachePolicy, timeoutInterval: 2.0)
-        request.HTTPMethod = "POST"
-        
-        let boundaryConstant = "----------V2ymHFg03esomerandomstuffhbqgZCaKO6jy";
-        let contentType = "multipart/form-data; boundary=" + boundaryConstant
-        NSURLProtocol.setProperty(contentType, forKey: "Content-Type", inRequest: request)
-        
-        // set data
-        let requestBodyData = (dataString as NSString).dataUsingEncoding(NSUTF8StringEncoding)
-        request.HTTPBody = requestBodyData
-        
-        // set content length
-        //NSURLProtocol.setProperty(requestBodyData.length, forKey: "Content-Length", inRequest: request)
-        
-        var response: NSURLResponse? = nil
-        var error: NSError? = nil
-        let reply = NSURLConnection.sendSynchronousRequest(request, returningResponse:&response, error:&error)
-        
-        let results = NSString(data:reply!, encoding:NSUTF8StringEncoding)
-        println("Response: \(results)")
     }
     
 }

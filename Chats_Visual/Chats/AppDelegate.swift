@@ -1,6 +1,6 @@
 import UIKit
 
-var account = Account(user: User(phone: "9492417906"))
+var account = Account(user: User(phone: "4085960635"))
 var manager_global = MPCManager()
 
 @UIApplicationMain
