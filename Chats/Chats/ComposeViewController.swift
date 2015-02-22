@@ -1,15 +1,24 @@
 import UIKit
+import MultipeerConnectivity
 
-class ComposeViewController: UIViewController, UITableViewDataSource, UITextViewDelegate {
+
+protocol ComposeViewControllerDelegate {
+    func finishedComposing(controller: ComposeViewController)
+}
+
+
+class ComposeViewController: UIViewController, UITableViewDataSource, UITextViewDelegate, MPCManagerDelegate {
     var searchResults: [User] = []
     var searchResultsTableView = UITableView(frame: CGRectZero, style: .Plain)
     var toolBar: UIToolbar!
     var toTextView = UITextView(frame: CGRectZero)
     var textView: UITextView!
     var sendButton: UIButton!
-    
+ 
     var delegate: ComposeViewControllerDelegate? = nil
     var newChat: Chat?
+    
+    let appDelegate = UIApplication.sharedApplication().delegate as AppDelegate
     
     override var inputAccessoryView: UIView! {
         get {
@@ -61,6 +70,8 @@ class ComposeViewController: UIViewController, UITableViewDataSource, UITextView
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        
+        appDelegate.manager.delegate = self
 
         view.backgroundColor = UIColor.whiteColor()
 
@@ -94,7 +105,8 @@ class ComposeViewController: UIViewController, UITableViewDataSource, UITextView
 
     func sendAction() {
         let sourcePhone = account.user.phone
-        let destPhone = toTextView.text
+        let toText = self.toTextView.text
+        let destPhone = toText.substringFromIndex(advance(toText.startIndex, 4))
         let msg = textView!.text
         let date = NSDate()
         let formatter = NSDateFormatter()
@@ -106,18 +118,19 @@ class ComposeViewController: UIViewController, UITableViewDataSource, UITextView
         println(msg)
         println(dateString)
         
-//        let packet = Packet(sourcePhone: sourcePhone, destPhone: destPhone, msg: msg, dateString: dateString)
-//        SEND PACKET 
-        println("send")
+        let packet = Packet(sourcePhone: sourcePhone, destPhone: destPhone, msg: msg, dateString: dateString)
         
-//        segue to chats view
+        // SEND PACKET
+        manager_global.sendData(packet)
+        
+        // go back to Chats view
         dismissViewControllerAnimated(true, completion: {
-            let toText = self.toTextView.text
-            let destPhone = toText.substringFromIndex(advance(toText.startIndex, 4))
-            let msg = self.textView.text
+            // save new chat
             self.newChat = Chat(user: User(phone: destPhone), lastMessageText: msg, lastMessageSentDate: NSDate())
-            self.newChat?.loadedMessages += [[Message(incoming: false, text: msg, sentDate: NSDate())]]
+            self.newChat?.loadedMessages += [[Message(incoming: false, text: msg, sentDate: NSDate(), status: MessageStatus.Waiting)]]
             account.chats.insert(self.newChat!, atIndex: 0)
+
+            // re-render Chats list
             self.delegate?.finishedComposing(self)
         })
         
@@ -155,4 +168,16 @@ class ComposeViewController: UIViewController, UITableViewDataSource, UITextView
     func cancelAction() {
         dismissViewControllerAnimated(true, completion: nil)
     }
+    
+    func foundPeer() {}
+    
+    func lostPeer() {}
+    
+    func invitationWasReceived(fromPeer: String) {
+        appDelegate.manager.invitationHandler(true, appDelegate.manager.session)
+    }
+    
+    func connectedWithPeer(peerID: MCPeerID) {}
+    
+    func messageReceived(message: Message) {}
 }

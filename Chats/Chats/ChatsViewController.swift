@@ -1,8 +1,12 @@
 import UIKit
+import MultipeerConnectivity
 
-class ChatsViewController: UITableViewController, ComposeViewControllerDelegate {
-    var chats: [Chat] { return account.chats }
+class ChatsViewController: UITableViewController, ComposeViewControllerDelegate, MPCManagerDelegate, ChatViewControllerDelegate {
+    
+//    var chats: [Chat] { return account.chats }
 
+    let appDelegate = UIApplication.sharedApplication().delegate as AppDelegate
+    
     convenience override init() {
         self.init(style: .Plain)
         title = "Chats"
@@ -11,6 +15,8 @@ class ChatsViewController: UITableViewController, ComposeViewControllerDelegate 
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        
+        appDelegate.manager.delegate = self
 
         let minute: NSTimeInterval = 60, hour = minute * 60, day = hour * 24
 //        account.chats = [
@@ -25,7 +31,7 @@ class ChatsViewController: UITableViewController, ComposeViewControllerDelegate 
     }
 
     override func tableView(tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return chats.count
+        return account.chats.count
     }
 
     override func tableView(tableView: UITableView, cellForRowAtIndexPath indexPath: NSIndexPath) -> UITableViewCell {
@@ -45,23 +51,24 @@ class ChatsViewController: UITableViewController, ComposeViewControllerDelegate 
     }
 
     override func tableView(tableView: UITableView, didSelectRowAtIndexPath indexPath: NSIndexPath) {
-        let chat = chats[indexPath.row]
+        let chat = account.chats[indexPath.row]
         let chatViewController = ChatViewController(chat: chat)
+        chatViewController.delegate = self
         navigationController?.pushViewController(chatViewController, animated: true)
     }
 
     func composeAction() {
         let composer = ComposeViewController()
         composer.delegate = self
-        
-        presentViewController(composer, animated: true, completion: nil)
+        let navigationController = UINavigationController(rootViewController: composer)
+        presentViewController(navigationController, animated: true, completion: nil)
     }
     
     func finishedComposing(controller: ComposeViewController) {
         let indexPath = NSIndexPath(forRow: 0, inSection: 0)
         tableView.insertRowsAtIndexPaths([indexPath], withRowAnimation: .Automatic)
 //        tableView.selectRowAtIndexPath(indexPath, animated: true, scrollPosition: UITableViewScrollPosition.Bottom)
-        let chat = chats[indexPath.row]
+        let chat = account.chats[indexPath.row]
         let chatViewController = ChatViewController(chat: chat)
         navigationController?.pushViewController(chatViewController, animated: true)
     }
@@ -78,5 +85,27 @@ class ChatsViewController: UITableViewController, ComposeViewControllerDelegate 
 //        
 //        //SEND MESSAGE BROADCAST THING HERE
 //    }
+    
+    func foundPeer() {}
+    
+    func lostPeer() {}
+    
+    func invitationWasReceived(fromPeer: String) {
+        appDelegate.manager.invitationHandler(true, appDelegate.manager.session)
+    }
+    
+    func connectedWithPeer(peerID: MCPeerID) {}
+
+    func messageReceived(message: Message) {
+        tableView.reloadData()
+        let indexPath = NSIndexPath(forRow: 0, inSection: 0)
+        tableView.reloadRowsAtIndexPaths([indexPath], withRowAnimation: .Automatic)
+    }
+    
+    func backToChats() {
+        tableView.reloadData()
+        let indexPath = NSIndexPath(forRow: 0, inSection: 0)
+        tableView.reloadRowsAtIndexPaths([indexPath], withRowAnimation: .Automatic)
+    }
 
 }

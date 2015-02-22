@@ -1,19 +1,27 @@
 import AudioToolbox
 import UIKit
+import MultipeerConnectivity
 
 let messageFontSize: CGFloat = 17
 let toolBarMinHeight: CGFloat = 44
 let textViewMaxHeight: (portrait: CGFloat, landscape: CGFloat) = (portrait: 272, landscape: 90)
 let messageSoundOutgoing: SystemSoundID = createMessageSoundOutgoing()
 
-class ChatViewController: UIViewController, UITableViewDataSource, UITableViewDelegate, UITextViewDelegate {
+protocol ChatViewControllerDelegate {
+    func backToChats()
+}
+
+class ChatViewController: UIViewController, UITableViewDataSource, UITableViewDelegate, UITextViewDelegate, MPCManagerDelegate {
     let chat: Chat
     var tableView: UITableView!
     var toolBar: UIToolbar!
     var textView: UITextView!
     var sendButton: UIButton!
     var rotating = false
-
+    
+    let appDelegate = UIApplication.sharedApplication().delegate as AppDelegate
+    var delegate: ChatViewControllerDelegate? = nil
+    
     override var inputAccessoryView: UIView! {
     get {
         if toolBar == nil {
@@ -71,6 +79,8 @@ class ChatViewController: UIViewController, UITableViewDataSource, UITableViewDe
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        
+        appDelegate.manager.delegate = self
 
 //        chat.loadedMessages = [
 //            [
@@ -120,6 +130,7 @@ class ChatViewController: UIViewController, UITableViewDataSource, UITableViewDe
     override func viewWillDisappear(animated: Bool)  {
         super.viewWillDisappear(animated)
         chat.draft = textView.text
+        delegate?.backToChats()
     }
 
     // This gets called a lot. Perhaps there's a better way to know when `view.window` has been set?
@@ -259,8 +270,23 @@ class ChatViewController: UIViewController, UITableViewDataSource, UITableViewDe
         // Autocomplete text before sending #hack
         textView.resignFirstResponder()
         textView.becomeFirstResponder()
+        
+        chat.loadedMessages.append([Message(incoming: false, text: textView.text, sentDate: NSDate(), status: MessageStatus.Waiting)])
+        chat.lastMessageText = textView.text
+        
+        for (i, ch) in enumerate(account.chats) {
+            if ch.user.phone == chat.user.phone {
+                account.chats.insert(chat, atIndex: 0)
+                account.chats.removeAtIndex(i+1)
+            }
+        }
 
-        chat.loadedMessages.append([Message(incoming: false, text: textView.text, sentDate: NSDate())])
+        // CREATE AND SEND PACKET THING
+        let packet = Packet(sourcePhone: account.user.phone, destPhone: chat.user.phone, msg: textView.text, dateString: "")
+        manager_global.sendData(packet)
+        
+        println(account.user.phone)
+        
         textView.text = nil
         updateTextViewHeight()
         sendButton.enabled = false
@@ -275,9 +301,6 @@ class ChatViewController: UIViewController, UITableViewDataSource, UITableViewDe
         tableView.endUpdates()
         tableViewScrollToBottomAnimated(true)
         AudioServicesPlaySystemSound(messageSoundOutgoing)
-        
-        //        CREATE AND SEND PACKET THING
-        //        let packet = Packet(sourcePhone: account.user.phone, destPhone: chat.user.phone, msg: textView.text, dateString: DATESTRINGIDK)
     }
 
     func tableViewScrollToBottomAnimated(animated: Bool) {
@@ -317,6 +340,22 @@ class ChatViewController: UIViewController, UITableViewDataSource, UITableViewDe
         }
         (notification.object as UIMenuController).menuItems = nil
     }
+    
+    func foundPeer() {}
+    
+    func lostPeer() {}
+    
+    func invitationWasReceived(fromPeer: String) {
+        appDelegate.manager.invitationHandler(true, appDelegate.manager.session)
+    }
+    
+    func connectedWithPeer(peerID: MCPeerID) {}
+    
+    func messageReceived(message: Message) {
+        self.viewDidLoad()
+        tableView.reloadData()
+    }
+    
 }
 
 func createMessageSoundOutgoing() -> SystemSoundID {
@@ -341,3 +380,5 @@ class InputTextView: UITextView {
         (delegate as ChatViewController).messageCopyTextAction(menuController)
     }
 }
+
+
