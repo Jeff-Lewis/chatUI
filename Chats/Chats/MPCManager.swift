@@ -20,6 +20,8 @@ protocol MPCManagerDelegate {
     func invitationWasReceived(fromPeer: String)
     
     func connectedWithPeer(peerID: MCPeerID)
+    
+    func messageReceived(message: Message)
 }
 
 
@@ -177,6 +179,28 @@ class MPCManager: NSObject, MCSessionDelegate, MCNearbyServiceBrowserDelegate, M
         // temporary - checking whether you are the desired recipient of the message
         if (packet.destPhone == self.myPhoneNumber) {
             NSNotificationCenter.defaultCenter().postNotificationName("receivedMPCDataNotification", object: nil, userInfo: dictionary)
+            
+            println("RECEIVED!!!!")
+            
+            let newMsg = Message(incoming: true, text: packet.msg, sentDate: NSDate(), status: MessageStatus.Success)
+            
+            var oldChatFound = false
+            for chat in account.chats {
+                if chat.user.phone == packet.sourcePhone {
+                    oldChatFound = true
+                    chat.loadedMessages += [[newMsg]]
+                    chat.lastMessageText = packet.msg
+                }
+            }
+            if oldChatFound == false {
+                let newChat = Chat(user: User(phone: packet.sourcePhone), lastMessageText: packet.msg, lastMessageSentDate: NSDate())
+                newChat.loadedMessages += [[newMsg]]
+                newChat.lastMessageText = packet.msg
+                account.chats.insert(newChat, atIndex: 0)
+            }
+            
+            delegate?.messageReceived(newMsg)
+            
         } else {
             var seen = false
             for item in seenMessages as [AnyObject] {

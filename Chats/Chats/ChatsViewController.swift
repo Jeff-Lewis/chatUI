@@ -97,15 +97,17 @@ class ChatsViewController: UITableViewController, ComposeViewControllerDelegate,
     func connectedWithPeer(peerID: MCPeerID) {}
 
     func messageReceived(message: Message) {
+        println("messageReceived")
+        println(account.chats.count)
         tableView.reloadData()
-        let indexPath = NSIndexPath(forRow: 0, inSection: 0)
-        tableView.reloadRowsAtIndexPaths([indexPath], withRowAnimation: .Automatic)
+//        let indexPath = NSIndexPath(forRow: 0, inSection: 0)
+//        tableView.reloadRowsAtIndexPaths([indexPath], withRowAnimation: .Automatic)
     }
     
     func backToChats() {
         tableView.reloadData()
-        let indexPath = NSIndexPath(forRow: 0, inSection: 0)
-        tableView.reloadRowsAtIndexPaths([indexPath], withRowAnimation: .Automatic)
+//        let indexPath = NSIndexPath(forRow: 0, inSection: 0)
+//        tableView.reloadRowsAtIndexPaths([indexPath], withRowAnimation: .Automatic)
     }
 
 }
